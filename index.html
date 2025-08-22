@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>お化け屋敷 整理券受付</title>
+<style>
+body { font-family: sans-serif; text-align: center; padding: 20px; }
+.card { border: 2px solid #333; border-radius: 10px; padding: 20px; margin: 20px auto; max-width: 400px; }
+input, button { padding: 10px; margin: 10px; width: 80%; }
+.ticket { font-size: 1.5em; font-weight: bold; margin-top: 20px; }
+.notice { text-align: left; margin-top: 20px; }
+</style>
+</head>
+<body>
+<h1>お化け屋敷 整理券受付</h1>
+<div class="card">
+  <form id="form">
+    <input type="text" id="name" placeholder="代表者名" required><br>
+    <input type="number" id="count" placeholder="人数" min="1" max="6" required><br>
+    <button type="submit">整理券を発行</button>
+  </form>
+  <div id="result"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, runTransaction, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    
+    // Firebase 設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyA-Kgf7QyprGNCWC2lD7psXPtQuw7DeJ4w",
+      authDomain: "haunted-ticket.firebaseapp.com",
+      projectId: "haunted-ticket",
+      storageBucket: "haunted-ticket.firebasestorage.app",
+      messagingSenderId: "895641088627",
+      appId: "1:895641088627:web:e67a0bdeff93239b967006"
+    };
+    
+    // Firebase 初期化（1回だけ）
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    
+    // 整理券番号を連番で取得
+    async function getNextTicketNumber() {
+      const counterRef = doc(db, "counters", "ticket");
+      let newNumber;
+      await runTransaction(db, async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+        if (!counterDoc.exists()) {
+          transaction.set(counterRef, { lastNumber: 0 });
+          newNumber = 1;
+        } else {
+          newNumber = counterDoc.data().lastNumber + 1;
+          transaction.update(counterRef, { lastNumber: newNumber });
+        }
+      });
+      return newNumber;
+    }
+    
+    // フォーム送信
+    document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  // フォーム要素とボタン取得
+  const nameInput = document.getElementById("name");
+  const countInput = document.getElementById("count");
+  const submitButton = e.target.querySelector("button");
+
+  // 入力値取得
+  let name = nameInput.value;
+  let count = countInput.value;
+
+  // 整理券番号取得
+  let ticketNum = await getNextTicketNumber();
+
+  // Firestore に保存
+  await addDoc(collection(db, "tickets"), {
+    name: name,
+    count: parseInt(count),
+    ticket: ticketNum,
+    createdAt: new Date()
+  });
+
+  // 結果を表示
+  document.getElementById("result").innerHTML = `
+    <div class="ticket">整理券番号: <span style="color:red;">${ticketNum.toString().padStart(3,'0')}</span></div>
+    <p>代表者: ${name} ／ 人数: ${count}名</p>
+    <div class="notice">
+      <h3>⚠ 注意事項</h3>
+      <ul>
+        <li>お化け屋敷内では走らないでください</li>
+        <li>小学生以下は保護者同伴で入場してください</li>
+      </ul>
+    </div>
+  `;
+
+  // ボタンを無効化して再送信を防ぐ
+  submitButton.disabled = true;
+  submitButton.textContent = "整理券発行済み";
+  
+  // 入力欄も無効化（任意）
+  nameInput.disabled = true;
+  countInput.disabled = true;
+});
+
+    </script>
+    
+
+</body>
+</html>
